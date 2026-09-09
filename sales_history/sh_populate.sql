@@ -524,8 +524,21 @@ rem *************************** insert data into the SUPPLEMENTARY_DEMOGRAPHICS 
 Prompt ******  Populating SUPPLEMENTARY_DEMOGRAPHICS table ....
 LOAD supplementary_demographics supplementary_demographics.csv
 
+rem *************************** gather statistics used by the generator
+
+Prompt ******  Gathering optimizer statistics for generated data ....
+BEGIN
+   DBMS_STATS.GATHER_TABLE_STATS('SH', 'TIMES',      estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
+   DBMS_STATS.GATHER_TABLE_STATS('SH', 'PRODUCTS',   estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
+   DBMS_STATS.GATHER_TABLE_STATS('SH', 'CUSTOMERS',  estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
+   DBMS_STATS.GATHER_TABLE_STATS('SH', 'CHANNELS',   estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
+   DBMS_STATS.GATHER_TABLE_STATS('SH', 'PROMOTIONS', estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
+END;
+/
+
 rem *************************** localize dimensions and extend generated data
 
+Prompt ******  Localizing dimensions and generating fact data ....
 @@sh_generate.sql
 
 rem *************************** Enabling table constraints
