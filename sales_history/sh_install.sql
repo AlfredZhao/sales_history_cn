@@ -125,11 +125,47 @@ rem Data generation options
 rem =======================================================
 
 PROMPT
-PROMPT 可按“最近 N 个完整自然年加本年截至今天”或指定日期范围扩展事实数据。
+PROMPT 可按“最近 N 个完整自然年加本年截至今天”或指定日期范围生成事实数据。
 ACCEPT generation_mode CHAR PROMPT '生成模式 [RECENT|RANGE] [RECENT]: ' DEFAULT 'RECENT'
-ACCEPT generation_years NUMBER PROMPT 'RECENT 模式的完整自然年数 [3]: ' DEFAULT '3'
-ACCEPT generation_start CHAR PROMPT 'RANGE 模式起始日期 (YYYY-MM-DD，可留空): ' DEFAULT ''
-ACCEPT generation_end CHAR PROMPT 'RANGE 模式结束日期 (YYYY-MM-DD，可留空): ' DEFAULT ''
+
+BEGIN
+   IF UPPER(TRIM('&generation_mode')) NOT IN ('RECENT', 'RANGE') THEN
+      RAISE_APPLICATION_ERROR(-20993, '生成模式只能是 RECENT 或 RANGE。');
+   END IF;
+END;
+/
+
+COLUMN generation_parameter_script NEW_VALUE generation_parameter_script NOPRINT
+SELECT CASE UPPER(TRIM('&generation_mode'))
+          WHEN 'RECENT' THEN 'sh_accept_recent.sql'
+          ELSE 'sh_accept_range.sql'
+       END AS generation_parameter_script
+  FROM dual;
+@@&generation_parameter_script
+
+rem Validate all generation parameters before an existing SH can be dropped.
+DECLARE
+   v_mode       VARCHAR2(10) := UPPER(TRIM('&generation_mode'));
+   v_start_date DATE;
+   v_end_date   DATE;
+BEGIN
+   IF v_mode = 'RECENT' THEN
+      IF TO_NUMBER('&generation_years') < 0 OR TO_NUMBER('&generation_years') > 100 THEN
+         RAISE_APPLICATION_ERROR(-20990, '完整自然年数必须在 0 到 100 之间。');
+      END IF;
+   ELSE
+      IF NOT REGEXP_LIKE(TRIM('&generation_start'), '^\d{4}-\d{2}-\d{2}$')
+         OR NOT REGEXP_LIKE(TRIM('&generation_end'), '^\d{4}-\d{2}-\d{2}$') THEN
+         RAISE_APPLICATION_ERROR(-20991, 'RANGE 模式必须填写 YYYY-MM-DD 格式的起始和结束日期。');
+      END IF;
+      v_start_date := TO_DATE(TRIM('&generation_start'), 'FXYYYY-MM-DD');
+      v_end_date := TO_DATE(TRIM('&generation_end'), 'FXYYYY-MM-DD');
+      IF v_start_date > v_end_date THEN
+         RAISE_APPLICATION_ERROR(-20992, '起始日期不能晚于结束日期。');
+      END IF;
+   END IF;
+END;
+/
 
 rem =======================================================
 rem cleanup old SH schema, if found and requested
@@ -213,7 +249,7 @@ SET HEADING ON
 rem reactivated by sub-scripts, turn it off again.
 SET FEEDBACK OFF
 
-SELECT '安装校验（动态生成表的“基线行数”为空）：' AS "安装校验" FROM dual;
+SELECT '安装校验（动态生成表的“预期固定行数”为空）：' AS "安装校验" FROM dual;
 
 SELECT 'channels' AS "Table", 5 AS "provided", count(1) AS "actual" FROM channels
 UNION ALL

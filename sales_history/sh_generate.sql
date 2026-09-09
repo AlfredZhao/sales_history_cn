@@ -1,5 +1,5 @@
 rem
-rem 中文化维度并按安装参数扩展 SH 事实数据。
+rem 中文化维度并按安装参数完整生成 SH 事实数据。
 rem 本脚本由 sh_populate.sql 调用，依赖 SQLcl 中的 generation_* 定义。
 rem
 
@@ -15,9 +15,6 @@ DECLARE
    v_end_text      VARCHAR2(30) := TRIM('&generation_end');
    v_requested_start DATE;
    v_requested_end   DATE;
-   v_sales_max       DATE;
-   v_times_max       DATE;
-   v_actual_start    DATE;
    v_rows            NUMBER;
    v_cost_rows       NUMBER;
    v_product_count   PLS_INTEGER;
@@ -45,16 +42,10 @@ BEGIN
       RAISE_APPLICATION_ERROR(-20993, '生成模式只能是 RECENT 或 RANGE。');
    END IF;
 
-   SELECT MAX(time_id) INTO v_sales_max FROM sales;
-   SELECT MAX(time_id) INTO v_times_max FROM times;
-   v_actual_start := GREATEST(v_requested_start, v_sales_max + 1);
-
    DBMS_OUTPUT.PUT_LINE('请求范围：' || TO_CHAR(v_requested_start, 'YYYY-MM-DD') || ' 至 ' || TO_CHAR(v_requested_end, 'YYYY-MM-DD'));
-   DBMS_OUTPUT.PUT_LINE('现有销售数据截至：' || TO_CHAR(v_sales_max, 'YYYY-MM-DD'));
 
-   -- TIMES 已有的日期也统一为中文口径；不足的日期补到请求结束日。
-   IF v_requested_end > v_times_max THEN
-      INSERT INTO times (
+   -- TIMES is generated from scratch for the complete requested range.
+   INSERT INTO times (
          time_id, day_name, day_number_in_week, day_number_in_month,
          calendar_week_number, fiscal_week_number, week_ending_day, week_ending_day_id,
          calendar_month_number, fiscal_month_number, calendar_month_desc, calendar_month_id,
@@ -88,8 +79,9 @@ BEGIN
              ADD_MONTHS(TRUNC(d, 'YYYY'), 12) - TRUNC(d, 'YYYY'),
              ADD_MONTHS(TRUNC(d, 'YYYY'), 12) - TRUNC(d, 'YYYY'),
              ADD_MONTHS(TRUNC(d, 'YYYY'), 12) - 1, ADD_MONTHS(TRUNC(d, 'YYYY'), 12) - 1
-        FROM (SELECT v_times_max + LEVEL d FROM dual CONNECT BY LEVEL <= v_requested_end - v_times_max);
-   END IF;
+        FROM (SELECT v_requested_start + LEVEL - 1 d
+                FROM dual
+              CONNECT BY LEVEL <= v_requested_end - v_requested_start + 1) requested_dates;
 
    UPDATE times
       SET day_name = CASE TRUNC(time_id) - TRUNC(time_id, 'IW')
@@ -147,8 +139,7 @@ BEGIN
       RAISE_APPLICATION_ERROR(-20994, '生成销售数据所需的维度表不能为空。');
    END IF;
 
-   IF v_actual_start <= v_requested_end THEN
-      INSERT INTO sales (prod_id, cust_id, time_id, channel_id, promo_id, quantity_sold, amount_sold)
+   INSERT INTO sales (prod_id, cust_id, time_id, channel_id, promo_id, quantity_sold, amount_sold)
       WITH daily_target AS (
          SELECT /*+ materialize */ time_id,
                 FLOOR((time_id - TRUNC(time_id, 'YYYY') + 1) * c_rows_per_year /
@@ -156,7 +147,7 @@ BEGIN
                 FLOOR((time_id - TRUNC(time_id, 'YYYY')) * c_rows_per_year /
                       (ADD_MONTHS(TRUNC(time_id, 'YYYY'), 12) - TRUNC(time_id, 'YYYY'))) row_count
            FROM times
-          WHERE time_id BETWEEN v_actual_start AND v_requested_end
+          WHERE time_id BETWEEN v_requested_start AND v_requested_end
       ), sale_keys AS (
          SELECT /*+ materialize leading(d n) */
                 d.time_id, n.sale_no,
@@ -197,21 +188,18 @@ BEGIN
         JOIN channel_list ch ON ch.rn = r.channel_rn
         JOIN promo_list pr   ON pr.rn = r.promo_rn;
 
-      v_rows := SQL%ROWCOUNT;
-      INSERT INTO costs (prod_id, time_id, promo_id, channel_id, unit_cost, unit_price)
+   v_rows := SQL%ROWCOUNT;
+   INSERT INTO costs (prod_id, time_id, promo_id, channel_id, unit_cost, unit_price)
       SELECT s.prod_id, s.time_id, s.promo_id, s.channel_id,
              ROUND(p.prod_min_price * 0.72, 2), p.prod_list_price
-        FROM (SELECT DISTINCT prod_id, time_id, promo_id, channel_id
-                FROM sales
-               WHERE time_id BETWEEN v_actual_start AND v_requested_end) s
+        FROM (SELECT DISTINCT s.prod_id, s.time_id, s.promo_id, s.channel_id
+                FROM sales s
+               WHERE s.time_id BETWEEN v_requested_start AND v_requested_end) s
         JOIN products p ON p.prod_id = s.prod_id;
-      v_cost_rows := SQL%ROWCOUNT;
-      DBMS_OUTPUT.PUT_LINE('实际新增范围：' || TO_CHAR(v_actual_start, 'YYYY-MM-DD') || ' 至 ' || TO_CHAR(v_requested_end, 'YYYY-MM-DD'));
-      DBMS_OUTPUT.PUT_LINE('新增 SALES 行数：' || TO_CHAR(v_rows) || '；随机种子：' || c_seed);
-      DBMS_OUTPUT.PUT_LINE('新增 COSTS 行数：' || TO_CHAR(v_cost_rows) || '（按产品、日期、促销和渠道去重）');
-   ELSE
-      DBMS_OUTPUT.PUT_LINE('请求范围不晚于现有销售数据，未新增 SALES/COSTS 行。');
-   END IF;
+   v_cost_rows := SQL%ROWCOUNT;
+   DBMS_OUTPUT.PUT_LINE('完整生成范围：' || TO_CHAR(v_requested_start, 'YYYY-MM-DD') || ' 至 ' || TO_CHAR(v_requested_end, 'YYYY-MM-DD'));
+   DBMS_OUTPUT.PUT_LINE('生成 SALES 行数：' || TO_CHAR(v_rows) || '；随机种子：' || c_seed);
+   DBMS_OUTPUT.PUT_LINE('生成 COSTS 行数：' || TO_CHAR(v_cost_rows) || '（按产品、日期、促销和渠道去重）');
 
    DBMS_MVIEW.REFRESH('CAL_MONTH_SALES_MV,FWEEK_PSCAT_SALES_MV', 'C');
    COMMIT;

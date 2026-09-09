@@ -494,11 +494,6 @@ COMMIT;
 rem *************************** set loading parameters
 SET LOAD BATCH_ROWS 10000 BATCHES_PER_COMMIT 1 DATE_FORMAT YYYY-MM-DD
 
-rem *************************** insert data into the COSTS table
-
-Prompt ******  Populating COSTS table ....
-LOAD costs costs.csv
-
 rem *************************** insert data into the CUSTOMERS table
 
 Prompt ******  Populating CUSTOMERS table ....
@@ -509,16 +504,6 @@ rem *************************** insert data into the PROMOTIONS table
 Prompt ******  Populating PROMOTIONS table ....
 LOAD promotions promotions.csv
 
-rem *************************** insert data into the SALES table
-
-Prompt ******  Populating SALES table ....
-LOAD sales sales.csv
-
-rem *************************** insert data into the TIMES table
-
-Prompt ******  Populating TIMES table ....
-LOAD times times.csv
-
 rem *************************** insert data into the SUPPLEMENTARY_DEMOGRAPHICS table
 
 Prompt ******  Populating SUPPLEMENTARY_DEMOGRAPHICS table ....
@@ -528,7 +513,6 @@ rem *************************** gather statistics used by the generator
 
 Prompt ******  Gathering optimizer statistics for generated data ....
 BEGIN
-   DBMS_STATS.GATHER_TABLE_STATS('SH', 'TIMES',      estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
    DBMS_STATS.GATHER_TABLE_STATS('SH', 'PRODUCTS',   estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
    DBMS_STATS.GATHER_TABLE_STATS('SH', 'CUSTOMERS',  estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
    DBMS_STATS.GATHER_TABLE_STATS('SH', 'CHANNELS',   estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
@@ -536,7 +520,7 @@ BEGIN
 END;
 /
 
-rem *************************** localize dimensions and extend generated data
+rem *************************** localize dimensions and generate all fact data
 
 Prompt ******  Localizing dimensions and generating fact data ....
 @@sh_generate.sql
