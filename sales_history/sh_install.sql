@@ -121,10 +121,21 @@ END;
 /
 
 rem =======================================================
+rem Data generation options
+rem =======================================================
+
+PROMPT
+PROMPT 可按“最近 N 个完整自然年加本年截至今天”或指定日期范围扩展事实数据。
+ACCEPT generation_mode CHAR PROMPT '生成模式 [RECENT|RANGE] [RECENT]: ' DEFAULT 'RECENT'
+ACCEPT generation_years NUMBER PROMPT 'RECENT 模式的完整自然年数 [3]: ' DEFAULT '3'
+ACCEPT generation_start CHAR PROMPT 'RANGE 模式起始日期 (YYYY-MM-DD，可留空): ' DEFAULT ''
+ACCEPT generation_end CHAR PROMPT 'RANGE 模式结束日期 (YYYY-MM-DD，可留空): ' DEFAULT ''
+
+rem =======================================================
 rem cleanup old SH schema, if found and requested
 rem =======================================================
 
-ACCEPT overwrite_schema PROMPT 'Do you want to overwrite the schema, if it already exists? [YES|no]: ' DEFAULT 'YES'
+ACCEPT overwrite_schema PROMPT 'SH 已存在时是否覆盖？ [YES|no]: ' DEFAULT 'YES'
 
 SET SERVEROUTPUT ON;
 DECLARE
@@ -202,11 +213,11 @@ SET HEADING ON
 rem reactivated by sub-scripts, turn it off again.
 SET FEEDBACK OFF
 
-SELECT 'Verification:' AS "Installation verification" FROM dual;
+SELECT '安装校验（动态生成表的“基线行数”为空）：' AS "安装校验" FROM dual;
 
 SELECT 'channels' AS "Table", 5 AS "provided", count(1) AS "actual" FROM channels
 UNION ALL
-SELECT 'costs' AS "Table", 82112 AS "provided", count(1) AS "actual" FROM costs
+SELECT 'costs' AS "Table", CAST(NULL AS NUMBER) AS "provided", count(1) AS "actual" FROM costs
 UNION ALL
 SELECT 'countries' AS "Table", 35 AS "provided", count(1) AS "actual" FROM countries
 UNION ALL
@@ -216,9 +227,9 @@ SELECT 'products' AS "Table", 72 AS "provided", count(1) AS "actual" FROM produc
 UNION ALL
 SELECT 'promotions' AS "Table", 503 AS "provided", count(1) AS "actual" FROM promotions
 UNION ALL
-SELECT 'sales' AS "Table", 918843 AS "provided", count(1) AS "actual" FROM sales
+SELECT 'sales' AS "Table", CAST(NULL AS NUMBER) AS "provided", count(1) AS "actual" FROM sales
 UNION ALL
-SELECT 'times' AS "Table", 1826 AS "provided", count(1) AS "actual" FROM times 
+SELECT 'times' AS "Table", CAST(NULL AS NUMBER) AS "provided", count(1) AS "actual" FROM times
 UNION ALL
 SELECT 'supplementary_demographics' AS "Table", 4500 AS "provided", count(1) AS "actual" FROM supplementary_demographics;
 
@@ -229,25 +240,25 @@ rem the SELECT '' FROM DUAL statements serve to print new lines
 rem and make the output more readable.
 rem
 
-SELECT 'The installation of the sample schema is now finished.'  AS "Thank you!"
+SELECT '示例模式安装完成。'  AS "安装完成"
    FROM dual
 UNION ALL
-SELECT 'Please check the installation verification output above.' AS "Thank you!"
+SELECT '请检查以上安装校验结果。' AS "安装完成"
    FROM dual
 UNION ALL
-SELECT '' AS "Thank you!"
+SELECT '' AS "安装完成"
    FROM dual
 UNION ALL
-SELECT 'You will now be disconnected from the database.' AS "Thank you!"
+SELECT '即将断开数据库连接。' AS "安装完成"
    FROM dual
 UNION ALL
-SELECT '' AS "Thank you!"
+SELECT '' AS "安装完成"
    FROM dual
 UNION ALL
-SELECT 'Thank you for using Oracle Database!' AS "Thank you!"
+SELECT '感谢使用 Oracle Database。' AS "安装完成"
    FROM dual
 UNION ALL
-SELECT '' AS "Thank you!"
+SELECT '' AS "安装完成"
    FROM dual;
 
 rem stop writing to the log file

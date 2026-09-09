@@ -173,7 +173,7 @@ Prompt ******  Creating TIMES table ....
 CREATE TABLE times
 (
    time_id                   DATE          NOT NULL,
-   day_name                  VARCHAR2(9)   NOT NULL,
+   day_name                  VARCHAR2(9 CHAR)   NOT NULL,
    day_number_in_week        NUMBER(1)     NOT NULL,
    day_number_in_month       NUMBER(2)     NOT NULL,
    calendar_week_number      NUMBER(2)     NOT NULL,
@@ -182,19 +182,19 @@ CREATE TABLE times
    week_ending_day_id        NUMBER        NOT NULL,
    calendar_month_number     NUMBER(2)     NOT NULL,
    fiscal_month_number       NUMBER(2)     NOT NULL,
-   calendar_month_desc       VARCHAR2(8)   NOT NULL,
+   calendar_month_desc       VARCHAR2(12 CHAR)  NOT NULL,
    calendar_month_id         NUMBER        NOT NULL,
-   fiscal_month_desc         VARCHAR2(8)   NOT NULL,
+   fiscal_month_desc         VARCHAR2(12 CHAR)  NOT NULL,
    fiscal_month_id           NUMBER        NOT NULL,
    days_in_cal_month         NUMBER        NOT NULL,
    days_in_fis_month         NUMBER        NOT NULL,
    end_of_cal_month          DATE          NOT NULL,
    end_of_fis_month          DATE          NOT NULL,
-   calendar_month_name       VARCHAR2(9)   NOT NULL,
-   fiscal_month_name         VARCHAR2(9)   NOT NULL,
-   calendar_quarter_desc     CHAR(7)       NOT NULL,
+   calendar_month_name       VARCHAR2(9 CHAR)   NOT NULL,
+   fiscal_month_name         VARCHAR2(9 CHAR)   NOT NULL,
+   calendar_quarter_desc     VARCHAR2(10 CHAR)  NOT NULL,
    calendar_quarter_id       NUMBER        NOT NULL,
-   fiscal_quarter_desc       CHAR(7)       NOT NULL,
+   fiscal_quarter_desc       VARCHAR2(10 CHAR)  NOT NULL,
    fiscal_quarter_id         NUMBER        NOT NULL,
    days_in_cal_quarter       NUMBER        NOT NULL,
    days_in_fis_quarter       NUMBER        NOT NULL,
@@ -259,7 +259,7 @@ CREATE TABLE sales
   --
   -- partitions
   -- 
- PARTITION BY RANGE (time_id)
+ PARTITION BY RANGE (time_id) INTERVAL (NUMTOYMINTERVAL(1, 'YEAR'))
 (
   PARTITION SALES_2021 VALUES LESS THAN 
     (TO_DATE('2022-01-01', 'YYYY-MM-DD', 'NLS_DATE_LANGUAGE = American')),
@@ -298,7 +298,7 @@ CREATE TABLE costs
  --
  -- partitions
  -- 
- PARTITION BY RANGE (time_id)
+ PARTITION BY RANGE (time_id) INTERVAL (NUMTOYMINTERVAL(1, 'YEAR'))
 (
   PARTITION COSTS_2021 VALUES LESS THAN 
     (TO_DATE('2022-01-01', 'YYYY-MM-DD', 'NLS_DATE_LANGUAGE = American')),

@@ -23,6 +23,13 @@ by geographical area.
 3. You are prompted for:
    1. `password` - enter an Oracle Database compliant password
    2. `tablespace` - if you do not enter a tablespace, the default database tablespace is used
+   3. `generation_mode` - `RECENT`（默认）生成最近 N 个完整自然年及今年截至执行日的数据；`RANGE` 使用指定的含首含尾日期范围
+   4. `generation_years` - `RECENT` 模式的完整自然年数，默认 `3`
+   5. `generation_start` / `generation_end` - `RANGE` 模式的 `YYYY-MM-DD` 起止日期；允许未来日期
+
+安装会保留原始样例历史数据，仅从当前 `SALES` 最大日期的次日开始新增数据；若请求起点更早，脚本会自动截断并显示实际范围。新增事实数据按每个完整自然年约 200,000 条 `SALES` 记录生成，当年或不完整年份按天数等比例生成。固定随机种子确保相同输入得到相同结果。
+
+所有时间字段按中国自然日历生成（周一为一周第一天、财年等于自然年），并将客户、促销、补充人口统计等维度更新为中文模拟数据。SH 的英文表和列名保持不变，以兼容原有示例 SQL。
 
 **Note:** If the `SH` schema already exists, it is removed/dropped and
 a fresh `SH` schema is installed

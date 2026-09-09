@@ -524,6 +524,10 @@ rem *************************** insert data into the SUPPLEMENTARY_DEMOGRAPHICS 
 Prompt ******  Populating SUPPLEMENTARY_DEMOGRAPHICS table ....
 LOAD supplementary_demographics supplementary_demographics.csv
 
+rem *************************** localize dimensions and extend generated data
+
+@@sh_generate.sql
+
 rem *************************** Enabling table constraints
 
 Prompt ******  Enabling table constraints
