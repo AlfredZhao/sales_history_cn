@@ -19,17 +19,3 @@
 4. 相同安装输入始终产生相同的事实数据，年化约 20 万条 sales 记录；支持 Oracle Database 19c+（AL32UTF8）及 SQLcl 26.1.2.0。
 
 详细安装、参数说明、校验 SQL 和卸载说明见：[使用手册](docs/使用手册.md)。
-
-## 提交到 GitHub
-
-仓库使用 SSH 远程地址。确认变更范围后，可运行：
-
-```bash
-scripts/commit-to-github.sh -m "你的提交说明"
-```
-
-如只需预览本次会提交的文件，运行：
-
-```bash
-scripts/commit-to-github.sh --dry-run
-```
