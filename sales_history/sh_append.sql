@@ -7,6 +7,7 @@ rem
 SET VERIFY OFF
 SET DEFINE ON
 SET SERVEROUTPUT ON
+ALTER SESSION SET NLS_CALENDAR='GREGORIAN';
 
 COLUMN append_end_default NEW_VALUE append_end_default NOPRINT
 SELECT TO_CHAR(TRUNC(SYSDATE), 'YYYY-MM-DD') AS append_end_default FROM dual;
@@ -48,8 +49,6 @@ END;
 /
 
 DECLARE
-   c_rows_per_year CONSTANT PLS_INTEGER := 200000;
-   c_seed          CONSTANT PLS_INTEGER := 20260909;
    v_end_text      VARCHAR2(30) := TRIM('&append_end');
    v_requested_start DATE;
    v_requested_end   DATE;
@@ -62,10 +61,6 @@ DECLARE
    v_costs_max       DATE;
    v_rows            NUMBER := 0;
    v_cost_rows       NUMBER := 0;
-   v_product_count   PLS_INTEGER;
-   v_customer_count  PLS_INTEGER;
-   v_channel_count   PLS_INTEGER;
-   v_promo_count     PLS_INTEGER;
    v_run_id          RAW(16) := SYS_GUID();
    v_error_message   VARCHAR2(4000);
 
@@ -144,15 +139,6 @@ BEGIN
              requested_end = v_requested_end
        WHERE run_id = v_run_id;
 
-      SELECT COUNT(*) INTO v_product_count  FROM products;
-      SELECT COUNT(*) INTO v_customer_count FROM customers;
-      SELECT COUNT(*) INTO v_channel_count  FROM channels;
-      SELECT COUNT(*) INTO v_promo_count    FROM promotions;
-      IF v_product_count = 0 OR v_customer_count = 0
-         OR v_channel_count = 0 OR v_promo_count = 0 THEN
-         RAISE_APPLICATION_ERROR(-20999, '生成销售数据所需的维度表不能为空。');
-      END IF;
-
    INSERT INTO times (
          time_id, day_name, day_number_in_week, day_number_in_month,
          calendar_week_number, fiscal_week_number, week_ending_day, week_ending_day_id,
@@ -191,64 +177,14 @@ BEGIN
                 FROM dual
               CONNECT BY LEVEL <= v_requested_end - v_requested_start + 1);
 
-   INSERT INTO sales (prod_id, cust_id, time_id, channel_id, promo_id, quantity_sold, amount_sold)
-      WITH daily_target AS (
-         SELECT /*+ materialize */ time_id,
-                FLOOR((time_id - TRUNC(time_id, 'YYYY') + 1) * c_rows_per_year /
-                      (ADD_MONTHS(TRUNC(time_id, 'YYYY'), 12) - TRUNC(time_id, 'YYYY'))) -
-                FLOOR((time_id - TRUNC(time_id, 'YYYY')) * c_rows_per_year /
-                      (ADD_MONTHS(TRUNC(time_id, 'YYYY'), 12) - TRUNC(time_id, 'YYYY'))) row_count
-           FROM times
-          WHERE time_id BETWEEN v_requested_start AND v_requested_end
-      ), sale_keys AS (
-         SELECT /*+ materialize leading(d n) */
-                d.time_id, n.sale_no,
-                TO_CHAR(d.time_id, 'YYYYMMDD') || ':' || TO_CHAR(n.sale_no) || ':' || TO_CHAR(c_seed) row_key
-           FROM daily_target d
-           JOIN (SELECT LEVEL sale_no FROM dual CONNECT BY LEVEL <= 600) n
-             ON n.sale_no <= d.row_count
-      ), randomized_sales AS (
-         SELECT /*+ materialize */ time_id, sale_no,
-                MOD(ORA_HASH(row_key || ':P', 999999), v_product_count) + 1 product_rn,
-                MOD(ORA_HASH(row_key || ':C', 999999), v_customer_count) + 1 customer_rn,
-                MOD(ORA_HASH(row_key || ':H', 999999), v_channel_count) + 1 channel_rn,
-                MOD(ORA_HASH(row_key || ':R', 999999), v_promo_count) + 1 promo_rn,
-                MOD(ORA_HASH(row_key || ':Q', 999999), 5) + 1 quantity_sold,
-                70 + MOD(ORA_HASH(row_key || ':D', 999999), 26) discount_percent
-           FROM sale_keys
-      ), product_list AS (
-         SELECT /*+ materialize */ prod_id, prod_list_price, ROW_NUMBER() OVER (ORDER BY prod_id) rn FROM products
-      ), customer_list AS (
-         SELECT /*+ materialize */ cust_id, ROW_NUMBER() OVER (ORDER BY cust_id) rn FROM customers
-      ), channel_list AS (
-         SELECT /*+ materialize */ channel_id, ROW_NUMBER() OVER (ORDER BY channel_id) rn FROM channels
-      ), promo_list AS (
-         SELECT /*+ materialize */ promo_id, ROW_NUMBER() OVER (ORDER BY promo_id) rn FROM promotions
-      )
-      SELECT /*+ leading(r) use_hash(p c ch pr) */
-             p.prod_id, c.cust_id, r.time_id, ch.channel_id, pr.promo_id,
-             r.quantity_sold,
-             ROUND(p.prod_list_price * r.quantity_sold * r.discount_percent / 100, 2)
-        FROM randomized_sales r
-        JOIN product_list p  ON p.rn = r.product_rn
-        JOIN customer_list c ON c.rn = r.customer_rn
-        JOIN channel_list ch ON ch.rn = r.channel_rn
-        JOIN promo_list pr   ON pr.rn = r.promo_rn;
-   v_rows := SQL%ROWCOUNT;
-
-   INSERT INTO costs (prod_id, time_id, promo_id, channel_id, unit_cost, unit_price)
-      SELECT s.prod_id, s.time_id, s.promo_id, s.channel_id,
-             ROUND(p.prod_min_price * 0.72, 2), p.prod_list_price
-        FROM (SELECT DISTINCT prod_id, time_id, promo_id, channel_id
-                FROM sales
-               WHERE time_id BETWEEN v_requested_start AND v_requested_end) s
-        JOIN products p ON p.prod_id = s.prod_id;
-   v_cost_rows := SQL%ROWCOUNT;
+   sh_data_generation.generate_facts(
+      v_requested_start, v_requested_end, v_rows, v_cost_rows);
 
    DBMS_MVIEW.REFRESH('CAL_MONTH_SALES_MV,FWEEK_PSCAT_SALES_MV', 'C');
    update_run('SUCCESS', v_requested_start, v_requested_end, v_rows, v_cost_rows);
 
    BEGIN
+   DBMS_STATS.GATHER_TABLE_STATS(USER, 'PROMOTIONS', estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
    DBMS_STATS.GATHER_TABLE_STATS(USER, 'TIMES', estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
    DBMS_STATS.GATHER_TABLE_STATS(USER, 'SALES', estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
    DBMS_STATS.GATHER_TABLE_STATS(USER, 'COSTS', estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE);
@@ -257,7 +193,7 @@ BEGIN
          DBMS_OUTPUT.PUT_LINE('数据已追加，但收集统计信息失败：' || SQLERRM);
    END;
    DBMS_OUTPUT.PUT_LINE('追加完成：' || TO_CHAR(v_requested_start, 'YYYY-MM-DD') || ' 至 ' || TO_CHAR(v_requested_end, 'YYYY-MM-DD'));
-   DBMS_OUTPUT.PUT_LINE('新增 SALES 行数：' || TO_CHAR(v_rows) || '；随机种子：' || c_seed);
+   DBMS_OUTPUT.PUT_LINE('新增 SALES 行数：' || TO_CHAR(v_rows) || '；随机种子：' || sh_data_generation.c_seed);
    DBMS_OUTPUT.PUT_LINE('新增 COSTS 行数：' || TO_CHAR(v_cost_rows) || '（按产品、日期、促销和渠道去重）');
    END IF;
 EXCEPTION

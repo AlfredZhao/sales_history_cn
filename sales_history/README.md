@@ -27,7 +27,9 @@ by geographical area.
    4. `generation_years` - `RECENT` 模式的完整自然年数，默认 `3`
    5. `generation_start` / `generation_end` - `RANGE` 模式的 `YYYY-MM-DD` 起止日期；允许未来日期
 
-客户、促销和补充人口统计等维度从原始样例文件装载；`TIMES`、`SALES` 和 `COSTS` 不装载原始事实文件，而是在用户选择的完整范围内从头生成。每个完整自然年约生成 200,000 条 `SALES` 记录，当年或不完整年份按天数等比例生成。固定随机种子确保相同输入得到相同结果。
+客户和补充人口统计维度从原始样例文件装载；`PROMOTIONS`、`TIMES`、`SALES` 和 `COSTS` 在用户选择的范围内生成，不装载其原始 CSV。每个完整自然年约生成 200,000 条 `SALES` 记录，当年或不完整年份按天数等比例生成。固定随机种子确保相同输入得到相同结果。
+
+促销按自然月生成有限期活动，销售仅关联当日有效活动或 `PROMO_ID=999`（无促销）。初始化和追加共用 `SH_DATA_GENERATION` 包，并在提交前校验销售及成本的促销有效期与每日销售行数。活动编号和窗口不随请求范围改变；此版本需要重新初始化，不迁移旧数据。详细规则见 `../docs/使用手册.md`。
 
 所有时间字段按中国自然日历生成（周一为一周第一天、财年等于自然年），并将客户、促销、补充人口统计等维度更新为中文模拟数据。SH 的英文表和列名保持不变，以兼容原有示例 SQL。
 
@@ -38,7 +40,7 @@ a fresh `SH` schema is installed
 
 - Oracle Database 19c and higher
 - **Requires [SQLcl](https://oracle.com/sqlcl) command prompt!**
-- Access to `sh_install.sql`, `sh_create.sql`, `sh_populate.sql`
+- Access to all SQL scripts, including `sh_install.sql`, `sh_create.sql`, `sh_populate.sql`, `sh_generate.sql`, and `sh_data_generation.sql`
 - Scripts need to be run as a privileged user with rights to create and drop another user (`SYSTEM`, `ADMIN`, etc.).
 
 ## Uninstall Instructions
@@ -56,6 +58,7 @@ a fresh `SH` schema is installed
 | Index             | `channels_pk`, `countries_pk`, `customers_gender_bix`, `customers_marital_bix`, `customers_pk`, `customers_yob_bix`, `dr$sup_text_idx$x`, `fw_psc_s_mv_chan_bix`, `fw_psc_s_mv_promo_bix`, `fw_psc_s_mv_subcat_bix`, `fw_psc_s_mv_wd_bix`, `products_pk`, `products_prod_cat_ix`, `products_prod_status_bix`, `products_prod_subcat_ix`, `promo_pk`, `sup_text_idx`, `times_pk` |
 | Partitioned Index | `costs_prod_bix`, `costs_time_bix`, `sales_channel_bix`, `sales_cust_bix`, `sales_prod_bix`, `sales_promo_bix`, `sales_time_bix` |
 | Materialized View | `cal_month_sales_mv`, `fweek_pscat_sales_mv` |
+| Package           | `sh_data_generation` (shared promotion/fact generator and validation) |
 | Table             | `channels`, `countries`, `customers`, `products`, `promotions`, `times` |
 | Partitioned Table | `costs`, `sales` |
 | View              | `profits` |

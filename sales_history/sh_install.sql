@@ -217,6 +217,7 @@ GRANT CREATE MATERIALIZED VIEW,
 ALTER SESSION SET CURRENT_SCHEMA=SH;
 ALTER SESSION SET NLS_LANGUAGE=American;
 ALTER SESSION SET NLS_TERRITORY=America;
+ALTER SESSION SET NLS_CALENDAR='GREGORIAN';
 
 select 'Start time: ' || systimestamp from dual;
 
@@ -261,7 +262,7 @@ SELECT 'customers' AS "Table", 55500 AS "provided", count(1) AS "actual" FROM cu
 UNION ALL
 SELECT 'products' AS "Table", 72 AS "provided", count(1) AS "actual" FROM products
 UNION ALL
-SELECT 'promotions' AS "Table", 503 AS "provided", count(1) AS "actual" FROM promotions
+SELECT 'promotions' AS "Table", CAST(NULL AS NUMBER) AS "provided", count(1) AS "actual" FROM promotions
 UNION ALL
 SELECT 'sales' AS "Table", CAST(NULL AS NUMBER) AS "provided", count(1) AS "actual" FROM sales
 UNION ALL
